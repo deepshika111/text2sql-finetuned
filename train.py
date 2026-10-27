@@ -121,7 +121,7 @@ def main():
         gradient_accumulation_steps=4,
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.03,
+        warmup_steps=0.03,
         max_length=args.max_len,
         completion_only_loss=True,  # only learn from the SQL part
         gradient_checkpointing=True,
