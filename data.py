@@ -128,11 +128,10 @@ def add_test_suite(rows):
 
 
 def bird():
-    from datasets import load_dataset
-
     bird_dir = fetch_zip(BIRD_ZIP_ID, "bird")
     db_paths = {p.stem: p for p in bird_dir.rglob("*.sqlite")}
-    ds = load_dataset("birdsql/bird_mini_dev")["mini_dev_sqlite"]
+    questions = next(bird_dir.rglob("mini_dev_sqlite.json"))
+    ds = json.loads(questions.read_text())
 
     rows = []
     for ex in ds:
