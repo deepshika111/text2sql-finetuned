@@ -17,6 +17,7 @@ from pathlib import Path
 
 import torch
 from datasets import Dataset
+from huggingface_hub import HfApi, snapshot_download
 from peft import LoraConfig
 from transformers import (AutoModelForCausalLM, AutoTokenizer,
                           BitsAndBytesConfig)
@@ -47,6 +48,23 @@ def make_examples(rows, tok, max_len):
     return examples
 
 
+def find_checkpoint(args):
+    """Find a checkpoint to resume from (local, or the copy on the hub)."""
+    out = Path(args.out)
+    if out.exists() and get_last_checkpoint(out):
+        return get_last_checkpoint(out)
+    if args.hub:
+        try:
+            snapshot_download(args.hub, local_dir=out,
+                              allow_patterns="last-checkpoint/*")
+        except Exception:
+            return None  # nothing saved yet
+        if (out / "last-checkpoint").exists():
+            print("resuming from hub checkpoint")
+            return str(out / "last-checkpoint")
+    return None
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--model", default=MODEL)
@@ -59,6 +77,7 @@ def main():
     p.add_argument("--unanswerable", type=float, default=0.05,
                    help="share of extra training rows that should refuse")
     p.add_argument("--limit", type=int, help="small smoke-test run")
+    p.add_argument("--hub", help="HF repo to save checkpoints to")
     args = p.parse_args()
 
     random.seed(args.seed)
@@ -78,7 +97,7 @@ def main():
     dtype = torch.bfloat16 if bf16 else torch.float16  # T4 has no bf16
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        torch_dtype=dtype,
+        dtype=dtype,
         quantization_config=BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -112,6 +131,11 @@ def main():
         save_steps=100,
         save_total_limit=2,
         report_to="none",
+        # also save checkpoints to the hub in case colab disconnects
+        push_to_hub=bool(args.hub),
+        hub_model_id=args.hub,
+        hub_strategy="checkpoint",
+        hub_private_repo=True,
     )
     trainer = SFTTrainer(model=model, args=config, train_dataset=data,
                          processing_class=tok, peft_config=lora)
@@ -119,8 +143,7 @@ def main():
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
     start = time.time()
-    last = get_last_checkpoint(args.out) if Path(args.out).exists() else None
-    result = trainer.train(resume_from_checkpoint=last)
+    result = trainer.train(resume_from_checkpoint=find_checkpoint(args))
 
     adapter = Path(args.out) / "adapter"
     trainer.save_model(adapter)
@@ -138,6 +161,11 @@ def main():
     }
     (Path(args.out) / "train_info.json").write_text(json.dumps(info, indent=2))
     print(info)
+
+    if args.hub:
+        HfApi().upload_folder(folder_path=args.out, repo_id=args.hub,
+                              allow_patterns=["adapter/*", "train_info.json"])
+        print(f"uploaded adapter to {args.hub}")
 
 
 if __name__ == "__main__":
