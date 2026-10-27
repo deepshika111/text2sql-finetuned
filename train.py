@@ -140,7 +140,7 @@ def main():
     trainer = SFTTrainer(model=model, args=config, train_dataset=data,
                          processing_class=tok, peft_config=lora)
 
-        if not bf16:
+    if not bf16:
         # TRL turns the LoRA weights into bf16, which fp16 training on a
         # T4 can't handle. Keep them in fp32 instead.
         for param in trainer.model.parameters():
