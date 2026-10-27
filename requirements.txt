@@ -1,0 +1,30 @@
+# data
+datasets>=3.0
+huggingface_hub>=0.25
+gdown>=5.2
+
+# training
+torch
+transformers>=4.56
+trl>=1.0
+peft>=0.17
+bitsandbytes>=0.46
+
+# inference
+vllm>=0.10
+sentence-transformers>=3.0
+
+# scoring and analysis
+sqlglot>=25.0
+numpy
+scikit-learn
+
+# extras
+gradio>=5.0
+pandas
+openai>=1.50
+anthropic>=0.40
+pytest>=8.0
+
+# 4-bit export only (install separately, it builds kernels):
+#   pip install gptqmodel --no-build-isolation
